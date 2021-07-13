@@ -19,7 +19,13 @@ contract FlightSuretyData {
         bool isValue;                                                   // Value exists in the mapping or not
     }
 
+    struct purchase{
+        uint256 amount;
+        bool isCredited;
+    }
+
     mapping(address => airline) registrations;
+    mapping(bytes32 => purchase) purchases;
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
@@ -69,8 +75,8 @@ contract FlightSuretyData {
         _;
     }
 
-    modifier requireAirlineExists(address a){
-        require(registrations[a].isValue, "Airline hasn't been registered yet");
+    modifier requireAirlineExists{
+        require(registrations[msg.sender].isValue, "Airline hasn't been registered yet");
         _;
     }
     /********************************************************************************************/
@@ -120,6 +126,7 @@ contract FlightSuretyData {
                             address add
                             )
                             isOperational
+                            requireAirlineExists
                             external
     {
         airline newAirline = airline(add, false, 0, true);
@@ -132,7 +139,9 @@ contract FlightSuretyData {
     *
     */   
     function buy
-                            (                             
+                            (
+                                string memory flight,
+                                uint256 timestamp
                             )
                             isOperational
                             requireAirlineExists
@@ -141,7 +150,9 @@ contract FlightSuretyData {
                             payable
     {
         require(msg.value > 0, "Invalid ether value");
-        require()
+
+        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
+        purchases[key].amount = msg.value;
     }
 
     /**
@@ -149,15 +160,25 @@ contract FlightSuretyData {
     */
     function creditInsurees
                                 (
-                                    address airline,
-                                    uint value
+                                    string memory flight,
+                                    uint256 timestamp
                                 )
                                 isOperational
                                 requireAirlineExists
                                 requireFunded
                                 external
     {
-        registrations[airline].accountValue = registrations[airline].accountValue + value;
+        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
+
+        // check if already credited
+        require(!purchases[key].isCredited, "Already credited!");
+
+        // credit 1.25 times the purchase
+        uint256 value = purchases[key].amount;
+        registrations[msg.sender].accountValue = value.multiply(1.25);
+
+        // set credited to true
+        purchases[key].isCredited = true;
     }
     
 
