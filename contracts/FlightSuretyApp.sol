@@ -89,14 +89,15 @@ contract FlightSuretyApp {
     */
     constructor
     (
-        address dataContractAddress
+        address dataContractAddress,
+        address firstAirline
     )
     public
     {
         contractOwner = msg.sender;
         operational = true;
-        flightSuretyData = dataContractAddress;
-        flightSuretyData.registerAirline(airline);
+        flightSuretyData = FlightSuretyData(dataContractAddress);
+        flightSuretyData.registerAirline(firstAirline);
         airlineCount++;
     }
 
@@ -106,7 +107,7 @@ contract FlightSuretyApp {
 
     function isOperational()
     public
-    pure
+    view
     returns(bool)
     {
         return operational;  // Modify to call data contract's status
@@ -148,7 +149,7 @@ contract FlightSuretyApp {
             registrationConsensusParticipants.push(msg.sender);
 
             // if no. of votes is 50% of registered airlines
-            if(registrationConsensusParticipants.length > airlineCount.multiply(0.5)){
+            if(registrationConsensusParticipants.length > airlineCount.div(2)){
 
                 // register and increment count
                 flightSuretyData.registerAirline(airline);
@@ -157,7 +158,7 @@ contract FlightSuretyApp {
                 // clear consensus mapping
                 uint votes = registrationConsensusParticipants.length;
                 for(uint i=0; i<registrationConsensusParticipants.length; i++){
-                    delete registrationConsensus(registrationConsensusParticipants[i]);
+                    delete registrationConsensus[registrationConsensusParticipants[i]];
                     delete registrationConsensusParticipants[i];
                 }
                 return (true, votes);
@@ -180,7 +181,7 @@ contract FlightSuretyApp {
     external
     {
         bool isRegistered = flightSuretyData.isRegistered(msg.sender);
-        Flight f = Flight(isRegistered, STATUS_CODE_UNKNOWN, timestamp, msg.sender);
+        Flight memory f = Flight(isRegistered, STATUS_CODE_UNKNOWN, timestamp, msg.sender);
 
         bytes32 key = getFlightKey(msg.sender, flight, timestamp);
 
@@ -207,7 +208,7 @@ contract FlightSuretyApp {
         flights[key].statusCode = statusCode;
 
         if(statusCode == STATUS_CODE_LATE_AIRLINE){
-            flightSuretyData.creditInsurees(flight, timestamp);
+            flightSuretyData.creditInsurees(airline, flight, timestamp);
         }
     }
 
@@ -412,29 +413,23 @@ contract FlightSuretyData{
     //register
     function registerAirline
     (
-        address airline
+        address add
     )
-    isOperational
-    requireAirlineExists
     external;
 
     //isRegistered
     function isRegistered(address add)
     public
     view
-    requireAirlineExists
     returns(bool);
 
     //creditInsurees
     function creditInsurees
     (
         address airline,
-        string memory flight,
+        string flight,
         uint256 timestamp
     )
-    isOperational
-    requireAirlineExists
-    requireFunded
     external;
 
 }

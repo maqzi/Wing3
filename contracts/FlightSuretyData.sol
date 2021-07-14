@@ -12,20 +12,22 @@ contract FlightSuretyData {
     address private contractOwner;                                      // Account used to deploy contract
     bool private operational = true;                                    // Blocks all state changes throughout the contract if false
 
-    struct airline{
+    struct airlineAccount{
         address accountAddress;                                         // Address of the airline account
         bool isRegistered;                                              // Blocks airlines that haven't submitted a stake
         uint256 accountValue;                                           // Monetary value of the account
         bool isValue;                                                   // Value exists in the mapping or not
     }
 
-    struct purchase{
-        uint256 amount;
-        bool isCredited;
+    struct purchase{                                                    // Individual purchases
+        uint256 amount;                                                 // Amount insured
+        bool isCredited;                                                // Has it been credited
     }
 
-    mapping(address => airline) registrations;
-    mapping(bytes32 => purchase) purchases;
+    mapping(address => airlineAccount) registrations;                          // Registered airlines
+    mapping(bytes32 => purchase) purchases;                             // Purchases
+
+    mapping(address => bool) callers;                                   // Authorized callers to this contract
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
@@ -71,17 +73,30 @@ contract FlightSuretyData {
     }
 
     modifier requireFunded(){
-        require(registrations[a].isRegistered, "Airline registered but hasn't submitted the stake yet");
+        require(registrations[msg.sender].isRegistered, "Airline registered but hasn't submitted the stake yet");
         _;
     }
 
-    modifier requireAirlineExists{
+    modifier requireAirlineExists(){
         require(registrations[msg.sender].isValue, "Airline hasn't been registered yet");
+        _;
+    }
+
+    modifier requireAuthorizedCaller(){
+        require(callers[msg.sender], "Caller is not authorized");
         _;
     }
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
+
+    function authorizeCaller(address airline) requireContractOwner external{
+        callers[airline] = true;
+    }
+
+    function denounceCaller(address airline) requireContractOwner external{
+        delete callers[airline];
+    }
     /**
         * @dev Get registration status of an airline
         *
@@ -90,7 +105,6 @@ contract FlightSuretyData {
     function isRegistered(address airline)
     public
     view
-    requireAirlineExists
     returns(bool)
     {
         return registrations[airline].isRegistered;
@@ -138,11 +152,11 @@ contract FlightSuretyData {
     (
         address add
     )
-    isOperational
+    requireIsOperational
     requireAirlineExists
     external
     {
-        airline newAirline = airline(add, false, 0, true);
+        airlineAccount memory newAirline = airlineAccount(add, false, 0, true);
         registrations[add] = newAirline;
     }
 
@@ -153,10 +167,10 @@ contract FlightSuretyData {
      */
     function buy
     (
-        string memory flight,
+        string flight,
         uint256 timestamp
     )
-    isOperational
+    requireIsOperational
     requireAirlineExists
     requireFunded
     external
@@ -174,14 +188,17 @@ contract FlightSuretyData {
     function creditInsurees
     (
         address airline,
-        string memory flight,
+        string flight,
         uint256 timestamp
     )
-    isOperational
-    requireAirlineExists
-    requireFunded
+    requireIsOperational
+    requireAuthorizedCaller
     external
     {
+        //airline exists and funded
+        require(registrations[airline].isValue, "Airline hasn't been registered yet");
+        require(isRegistered(airline), "Airline hasn't been funded yet");
+
         bytes32 key = getFlightKey(airline, flight, timestamp);
 
         // check if already credited
@@ -189,7 +206,7 @@ contract FlightSuretyData {
 
         // credit 1.25 times the purchase
         uint256 value = purchases[key].amount;
-        registrations[airline].accountValue = value.multiply(1.25);
+        registrations[airline].accountValue = value.mul(5).div(4);
 
         // set credited to true
         purchases[key].isCredited = true;
@@ -203,7 +220,7 @@ contract FlightSuretyData {
     function pay
     (
     )
-    isOperational
+    requireIsOperational
     requireAirlineExists
     requireFunded
     external
@@ -211,7 +228,7 @@ contract FlightSuretyData {
     {
         require(registrations[msg.sender].accountValue > 0, "Insufficient balance to transfer");
 
-        uint memory value = registrations[msg.sender].accountValue;
+        uint value = registrations[msg.sender].accountValue;
         registrations[msg.sender].accountValue = 0;
 
         msg.sender.transfer(value);
@@ -225,7 +242,7 @@ contract FlightSuretyData {
     function fund
     (
     )
-    isOperational
+    requireIsOperational
     requireAirlineExists
     public
     payable
