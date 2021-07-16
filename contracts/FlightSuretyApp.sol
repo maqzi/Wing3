@@ -38,7 +38,6 @@ contract FlightSuretyApp {
     bool private operational;
 
     FlightSuretyData flightSuretyData;
-    uint256 airlineCount;
 
     mapping(address => bool) registrationConsensus;
     address[] registrationConsensusParticipants;
@@ -94,11 +93,10 @@ contract FlightSuretyApp {
     )
     public
     {
+        flightSuretyData = FlightSuretyData(dataContractAddress);
+        flightSuretyData.registerFreeAirline(msg.sender, firstAirline);
         contractOwner = msg.sender;
         operational = true;
-        flightSuretyData = FlightSuretyData(dataContractAddress);
-        flightSuretyData.registerAirline(firstAirline);
-        airlineCount++;
     }
 
     /********************************************************************************************/
@@ -123,7 +121,6 @@ contract FlightSuretyApp {
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
-
     /**
      * @dev Add an airline to the registration queue
      *
@@ -136,10 +133,10 @@ contract FlightSuretyApp {
     requireIsRegistered
     returns(bool, uint256)
     {
+        uint256 airlineCount = flightSuretyData.getAirlineCount();
         // register airline if less than 4 registrations
         if (airlineCount < 4){
             flightSuretyData.registerAirline(airline);
-            airlineCount++;
             return (true, 0);
         }
 
@@ -153,7 +150,6 @@ contract FlightSuretyApp {
 
                 // register and increment count
                 flightSuretyData.registerAirline(airline);
-                airlineCount++;
 
                 // clear consensus mapping
                 uint votes = registrationConsensusParticipants.length;
@@ -161,12 +157,12 @@ contract FlightSuretyApp {
                     delete registrationConsensus[registrationConsensusParticipants[i]];
                     delete registrationConsensusParticipants[i];
                 }
+                registrationConsensusParticipants.length=0;
                 return (true, votes);
             }
         }
         return (false, registrationConsensusParticipants.length);
     }
-
 
     /**
      * @dev Register a future flight for insuring.
@@ -417,6 +413,14 @@ contract FlightSuretyData{
     )
     external;
 
+    //register first
+    function registerFreeAirline
+    (
+        address owner,
+        address add
+    )
+    external;
+
     //isRegistered
     function isRegistered(address add)
     public
@@ -431,5 +435,13 @@ contract FlightSuretyData{
         uint256 timestamp
     )
     external;
+
+    // airline counter
+    function getAirlineCount
+    (
+    )
+    external
+    view
+    returns(uint256);
 
 }

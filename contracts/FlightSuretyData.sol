@@ -18,14 +18,17 @@ contract FlightSuretyData {
         uint256 accountValue;                                           // Monetary value of the account
         bool isValue;                                                   // Value exists in the mapping or not
     }
+    uint256 airlineCount;                                               // # of registered airlines
 
-    struct purchase{                                                    // Individual purchases
-        uint256 amount;                                                 // Amount insured
+    struct purchase{                                                    // Individual plans
+        uint256[] amount;                                               // Amount insured
         bool isCredited;                                                // Has it been credited
+        address[] insurees;
     }
 
-    mapping(address => airlineAccount) registrations;                          // Registered airlines
+    mapping(address => airlineAccount) registrations;                   // Registered airlines
     mapping(bytes32 => purchase) purchases;                             // Purchases
+    mapping(address => uint256) credits;                                // Withdrawals available
 
     mapping(address => bool) callers;                                   // Authorized callers to this contract
     /********************************************************************************************/
@@ -43,6 +46,7 @@ contract FlightSuretyData {
     public
     {
         contractOwner = msg.sender;
+        callers[contractOwner] = true;
     }
 
     /********************************************************************************************/
@@ -72,13 +76,13 @@ contract FlightSuretyData {
         _;
     }
 
-    modifier requireFunded(){
-        require(registrations[msg.sender].isRegistered, "Airline registered but hasn't submitted the stake yet");
+    modifier requireFunded(address airline){
+        require(registrations[airline].isRegistered, "Airline registered but hasn't submitted the stake yet");
         _;
     }
 
-    modifier requireAirlineExists(){
-        require(registrations[msg.sender].isValue, "Airline hasn't been registered yet");
+    modifier requireAirlineExists(address airline){
+        require(isAirline(airline), "Airline hasn't been registered yet");
         _;
     }
 
@@ -86,16 +90,26 @@ contract FlightSuretyData {
         require(callers[msg.sender], "Caller is not authorized");
         _;
     }
+
+    modifier requireAuthorizedCallerOrRegisteredAirline(){
+        require(callers[msg.sender] || registrations[msg.sender].isRegistered, "Caller is not authorized or a registered airline");
+        _;
+    }
+
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
 
-    function authorizeCaller(address airline) requireContractOwner external{
-        callers[airline] = true;
+    function authorizeCaller(address add) requireContractOwner external{
+        callers[add] = true;
     }
 
-    function denounceCaller(address airline) requireContractOwner external{
-        delete callers[airline];
+    function deauthorizeCaller(address add) requireContractOwner external{
+        delete callers[add];
+    }
+
+    function isAirline(address add) public view returns(bool){
+        return registrations[add].isValue;
     }
     /**
         * @dev Get registration status of an airline
@@ -142,7 +156,23 @@ contract FlightSuretyData {
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
+    function getAirlineCount() external view returns(uint256){
+        return airlineCount;
+    }
 
+    function registerFreeAirline
+    (
+        address owner,
+        address add
+    )
+    requireIsOperational
+    external
+    {
+        require(owner == contractOwner, "only contract owner can add airlines without funding");
+        airlineAccount memory newAirline = airlineAccount(add, true, 0, true);
+        registrations[add] = newAirline;
+        airlineCount++;
+    }
     /**
      * @dev Add an airline to the registration queue
      *      Can only be called from FlightSuretyApp contract
@@ -153,7 +183,7 @@ contract FlightSuretyData {
         address add
     )
     requireIsOperational
-    requireAirlineExists
+    requireAuthorizedCallerOrRegisteredAirline
     external
     {
         airlineAccount memory newAirline = airlineAccount(add, false, 0, true);
@@ -167,19 +197,21 @@ contract FlightSuretyData {
      */
     function buy
     (
+        address airline,
         string flight,
         uint256 timestamp
     )
     requireIsOperational
-    requireAirlineExists
-    requireFunded
+    requireAirlineExists(airline)
+    requireFunded(airline)
     external
     payable
     {
-        require(msg.value > 0, "Invalid ether value");
+        require(msg.value > 0 && msg.value <= 1000000000000000000, "Invalid ether value (valid ranges: [0-1) eths");
 
-        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
-        purchases[key].amount = msg.value;
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        purchases[key].amount.push(msg.value);
+        purchases[key].insurees.push(msg.sender);
     }
 
     /**
@@ -192,26 +224,25 @@ contract FlightSuretyData {
         uint256 timestamp
     )
     requireIsOperational
-    requireAuthorizedCaller
+        //    requireAuthorizedCaller //todo: MAJOR SECURITY FLAW. ANYONE CAN TRIGGER A CREDIT EVEN IF FLIGHT NOT DELAYED
+    requireAirlineExists(airline)
+    requireFunded(airline)
     external
     {
-        //airline exists and funded
-        require(registrations[airline].isValue, "Airline hasn't been registered yet");
-        require(isRegistered(airline), "Airline hasn't been funded yet");
-
         bytes32 key = getFlightKey(airline, flight, timestamp);
 
         // check if already credited
         require(!purchases[key].isCredited, "Already credited!");
 
-        // credit 1.25 times the purchase
-        uint256 value = purchases[key].amount;
-        registrations[airline].accountValue = value.mul(5).div(4);
+        // credit 1.5 times the purchase
+        for(uint i=0; i<purchases[key].amount.length; i++){
+            uint256 value = purchases[key].amount[i];
+            credits[purchases[key].insurees[i]] = value.mul(3).div(2);
+        }
 
-        // set credited to true
+        // set credited to true so accounts aren't recredited
         purchases[key].isCredited = true;
     }
-
 
     /**
      *  @dev Transfers eligible payout funds to insuree
@@ -221,15 +252,14 @@ contract FlightSuretyData {
     (
     )
     requireIsOperational
-    requireAirlineExists
-    requireFunded
+        //    requireAuthorizedCaller
     external
     payable
     {
-        require(registrations[msg.sender].accountValue > 0, "Insufficient balance to transfer");
+        require(credits[msg.sender] > 0, "Insufficient balance to transfer");
 
-        uint value = registrations[msg.sender].accountValue;
-        registrations[msg.sender].accountValue = 0;
+        uint value = uint(credits[msg.sender]);
+        delete credits[msg.sender];
 
         msg.sender.transfer(value);
     }
@@ -243,14 +273,15 @@ contract FlightSuretyData {
     (
     )
     requireIsOperational
-    requireAirlineExists
+    requireAirlineExists(msg.sender)
     public
     payable
     {
-        require(!registrations[msg.sender].isRegistered, "Airline already registered");
-        require(msg.value == 10, "Payment should exactly equal 10 ethers");
+        require(!isRegistered(msg.sender), "Airline already registered");
+        require(msg.value == 10000000000000000000, "Payment should exactly equal 10 ethers + gas");
 
         registrations[msg.sender].isRegistered = true;
+        airlineCount++;
     }
 
     function getFlightKey
@@ -280,4 +311,3 @@ contract FlightSuretyData {
 
 
 }
-
