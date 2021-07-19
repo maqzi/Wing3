@@ -100,11 +100,11 @@ contract FlightSuretyData {
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
 
-    function authorizeCaller(address add) requireContractOwner external{
+    function authorizeCaller(address add) requireContractOwner public{
         callers[add] = true;
     }
 
-    function deauthorizeCaller(address add) requireContractOwner external{
+    function deauthorizeCaller(address add) requireContractOwner public{
         delete callers[add];
     }
 
@@ -162,13 +162,12 @@ contract FlightSuretyData {
 
     function registerFreeAirline
     (
-        address owner,
         address add
     )
     requireIsOperational
-    external
+    requireAuthorizedCaller
+    public
     {
-        require(owner == contractOwner, "only contract owner can add airlines without funding");
         airlineAccount memory newAirline = airlineAccount(add, true, 0, true);
         registrations[add] = newAirline;
         airlineCount++;
@@ -183,7 +182,7 @@ contract FlightSuretyData {
         address add
     )
     requireIsOperational
-    requireAuthorizedCallerOrRegisteredAirline
+    requireAuthorizedCaller
     external
     {
         airlineAccount memory newAirline = airlineAccount(add, false, 0, true);
@@ -197,11 +196,13 @@ contract FlightSuretyData {
      */
     function buy
     (
+        address user,
         address airline,
         string flight,
         uint256 timestamp
     )
     requireIsOperational
+    requireAuthorizedCaller
     requireAirlineExists(airline)
     requireFunded(airline)
     external
@@ -211,7 +212,7 @@ contract FlightSuretyData {
 
         bytes32 key = getFlightKey(airline, flight, timestamp);
         purchases[key].amount.push(msg.value);
-        purchases[key].insurees.push(msg.sender);
+        purchases[key].insurees.push(user);
     }
 
     /**
@@ -224,7 +225,7 @@ contract FlightSuretyData {
         uint256 timestamp
     )
     requireIsOperational
-        //    requireAuthorizedCaller //todo: MAJOR SECURITY FLAW. ANYONE CAN TRIGGER A CREDIT EVEN IF FLIGHT NOT DELAYED
+    requireAuthorizedCaller
     requireAirlineExists(airline)
     requireFunded(airline)
     external
@@ -250,18 +251,19 @@ contract FlightSuretyData {
     */
     function pay
     (
+        address add //user
     )
     requireIsOperational
-        //    requireAuthorizedCaller
+    requireAuthorizedCaller
     external
     payable
     {
-        require(credits[msg.sender] > 0, "Insufficient balance to transfer");
+        require(credits[add] > 0, "Insufficient balance to transfer");
 
-        uint value = uint(credits[msg.sender]);
-        delete credits[msg.sender];
+        uint value = uint(credits[add]);
+        delete credits[add];
 
-        msg.sender.transfer(value);
+        add.transfer(value);
     }
 
     /**
@@ -271,16 +273,18 @@ contract FlightSuretyData {
      */
     function fund
     (
+        address add
     )
     requireIsOperational
-    requireAirlineExists(msg.sender)
+    requireAuthorizedCaller
+    requireAirlineExists(add)
     public
     payable
     {
-        require(!isRegistered(msg.sender), "Airline already registered");
+        require(!isRegistered(add), "Airline already registered");
         require(msg.value == 10000000000000000000, "Payment should exactly equal 10 ethers + gas");
 
-        registrations[msg.sender].isRegistered = true;
+        registrations[add].isRegistered = true;
         airlineCount++;
     }
 
@@ -306,7 +310,7 @@ contract FlightSuretyData {
     payable
     {
         require(msg.data.length == 0, "No data allowed in the fallback function");
-        fund();
+        fund(msg.sender);
     }
 
 

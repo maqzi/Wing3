@@ -88,13 +88,11 @@ contract FlightSuretyApp {
     */
     constructor
     (
-        address dataContractAddress,
-        address firstAirline
+        address dataContractAddress
     )
     public
     {
         flightSuretyData = FlightSuretyData(dataContractAddress);
-        flightSuretyData.registerFreeAirline(msg.sender, firstAirline);
         contractOwner = msg.sender;
         operational = true;
     }
@@ -120,6 +118,18 @@ contract FlightSuretyApp {
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
+
+    function buy(
+        address airline,
+        string flight,
+        uint256 timestamp
+    )
+    external
+    requireIsOperational
+    payable
+    {
+        flightSuretyData.buy.value(msg.value)(msg.sender, airline, flight, timestamp);
+    }
 
     /**
      * @dev Add an airline to the registration queue
@@ -208,6 +218,13 @@ contract FlightSuretyApp {
         }
     }
 
+    function pay() requireIsOperational external{
+        flightSuretyData.pay(msg.sender);
+    }
+
+    function fund() requireIsOperational external payable{
+        flightSuretyData.fund.value(msg.value)(msg.sender);
+    }
 
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus
@@ -444,4 +461,33 @@ contract FlightSuretyData{
     view
     returns(uint256);
 
+    // transfer the credit
+    function pay
+    (
+        address add
+    )
+    external
+    payable;
+
+    // auth
+    function authorizeCaller(address add) external;
+
+    // fund
+    function fund
+    (
+        address add
+    )
+    public
+    payable;
+
+    // buy
+    function buy
+    (
+        address user,
+        address airline,
+        string flight,
+        uint256 timestamp
+    )
+    external
+    payable;
 }

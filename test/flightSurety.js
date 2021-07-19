@@ -101,7 +101,7 @@ contract('Flight Surety Tests', async (accounts) => {
         // ACT
         try {
             await config.flightSuretyApp.registerAirline(newAirline, {from: config.firstAirline});
-            await config.flightSuretyData.fund({from: newAirline, value:10000000000000000000});
+            await config.flightSuretyApp.fund({from: newAirline, value:10000000000000000000});
         }
         catch(e) {
 
@@ -122,11 +122,11 @@ contract('Flight Surety Tests', async (accounts) => {
 
         // ACT
         await config.flightSuretyApp.registerAirline(newAirline0, {from: config.firstAirline});
-        await config.flightSuretyData.fund({from: newAirline0, value:10000000000000000000});
+        await config.flightSuretyApp.fund({from: newAirline0, value:10000000000000000000});
         assert.equal(await config.flightSuretyData.getAirlineCount.call(), 3, "3 airlines registered at this point") //c#3
 
         await config.flightSuretyApp.registerAirline(newAirline1, {from: newAirline0});
-        await config.flightSuretyData.fund({from: newAirline1, value:10000000000000000000});
+        await config.flightSuretyApp.fund({from: newAirline1, value:10000000000000000000});
         assert.equal(await config.flightSuretyData.getAirlineCount.call(), 4, "4 airlines registered at this point") //c#4
 
         await config.flightSuretyApp.registerAirline(newAirline2, {from:newAirline0});
@@ -174,7 +174,7 @@ contract('Flight Surety Tests', async (accounts) => {
         let balance = await web3.eth.getBalance(passenger);
         let insurance = 1000000000000000000;
 
-        let response = await config.flightSuretyData.buy(airline, flight, timestamp, {from:passenger, value:insurance});
+        let response = await config.flightSuretyApp.buy(airline, flight, timestamp, {from:passenger, value:insurance});
         let newBalance = await web3.eth.getBalance(passenger);
 
         assert.equal(newBalance <= balance - web3.utils.toWei(JSON.stringify(insurance),'wei') - web3.utils.toWei(JSON.stringify(response.receipt.gasUsed),'wei')
@@ -193,7 +193,7 @@ contract('Flight Surety Tests', async (accounts) => {
         // console.log('init user balance: ', balance);
 
         await config.flightSuretyData.creditInsurees(airline, flight, timestamp, {from:config.owner});
-        await config.flightSuretyData.pay({from:passenger});
+        await config.flightSuretyApp.pay({from:passenger});
 
         let newBalance = await web3.eth.getBalance(passenger);
         // console.log('new user balance: ', newBalance);
