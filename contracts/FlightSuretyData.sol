@@ -91,11 +91,6 @@ contract FlightSuretyData {
         _;
     }
 
-    modifier requireAuthorizedCallerOrRegisteredAirline(){
-        require(callers[msg.sender] || registrations[msg.sender].isRegistered, "Caller is not authorized or a registered airline");
-        _;
-    }
-
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/

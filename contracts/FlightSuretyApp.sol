@@ -23,6 +23,7 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
+    mapping(uint8 => string) results;
 
     address private contractOwner; // Account used to deploy contract
 
@@ -34,6 +35,7 @@ contract FlightSuretyApp {
     }
 
     mapping(bytes32 => Flight) private flights;
+    mapping(bytes32 => bool) private flightExists;
 
     bool private operational;
 
@@ -77,7 +79,11 @@ contract FlightSuretyApp {
         _;
     }
 
-
+    modifier requireFlightExists(address airline, string flight, uint256 timestamp){
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        require(flightExists[key],"Flight doesnt exist.");
+        _;
+    }
     /********************************************************************************************/
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
@@ -115,6 +121,27 @@ contract FlightSuretyApp {
     {
         operational = mode;
     }
+
+    function getFlightStatus(
+        address airline,
+        string flight,
+        uint256 timestamp
+    )
+    external
+    requireFlightExists(airline, flight, timestamp)
+    returns(string)
+    {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+
+        results[STATUS_CODE_UNKNOWN] = "STATUS_CODE_UNKNOWN";
+        results[STATUS_CODE_ON_TIME] = "STATUS_CODE_ON_TIME";
+        results[STATUS_CODE_LATE_AIRLINE] = "STATUS_CODE_LATE_AIRLINE";
+        results[STATUS_CODE_LATE_WEATHER] = "STATUS_CODE_LATE_WEATHER";
+        results[STATUS_CODE_LATE_TECHNICAL] = "STATUS_CODE_LATE_TECHNICAL";
+        results[STATUS_CODE_LATE_OTHER] = "STATUS_CODE_LATE_OTHER";
+
+        return results[flights[key].statusCode];
+    }
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
@@ -140,9 +167,14 @@ contract FlightSuretyApp {
         address airline
     )
     external
-    requireIsRegistered
+    requireIsOperational
     returns(bool, uint256)
     {
+        if(msg.sender != contractOwner){
+            if (!flightSuretyData.isRegistered(msg.sender)){
+                revert();
+            }
+        }
         uint256 airlineCount = flightSuretyData.getAirlineCount();
         // register airline if less than 4 registrations
         if (airlineCount < 4){
@@ -158,9 +190,6 @@ contract FlightSuretyApp {
             // if no. of votes is 50% of registered airlines
             if(registrationConsensusParticipants.length > airlineCount.div(2)){
 
-                // register and increment count
-                flightSuretyData.registerAirline(airline);
-
                 // clear consensus mapping
                 uint votes = registrationConsensusParticipants.length;
                 for(uint i=0; i<registrationConsensusParticipants.length; i++){
@@ -168,6 +197,10 @@ contract FlightSuretyApp {
                     delete registrationConsensusParticipants[i];
                 }
                 registrationConsensusParticipants.length=0;
+
+                // register and increment count
+                flightSuretyData.registerAirline(airline);
+
                 return (true, votes);
             }
         }
@@ -180,18 +213,22 @@ contract FlightSuretyApp {
      */
     function registerFlight
     (
+        address airline,
         uint256 timestamp,
         string flight
     )
     requireIsOperational
     external
     {
-        bool isRegistered = flightSuretyData.isRegistered(msg.sender);
-        Flight memory f = Flight(isRegistered, STATUS_CODE_UNKNOWN, timestamp, msg.sender);
+        bool isRegistered = flightSuretyData.isRegistered(airline);
+        require(isRegistered,"Airline not added or funded.");
 
-        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
+        Flight memory f = Flight(isRegistered, STATUS_CODE_UNKNOWN, timestamp, airline);
+
+        bytes32 key = getFlightKey(airline, flight, timestamp);
 
         flights[key] = f;
+        flightExists[key] = true;
     }
 
     /**

@@ -8,7 +8,7 @@ module.exports = function(deployer) {
     deployer.deploy(FlightSuretyData) //todo: run init here?
         .then(() => {
             return deployer.deploy(FlightSuretyApp, FlightSuretyData.address)
-                .then(() => {
+                .then(async () => {
                     let config = {
                         localhost: {
                             url: 'http://localhost:8545',
@@ -16,8 +16,12 @@ module.exports = function(deployer) {
                             appAddress: FlightSuretyApp.address
                         }
                     }
-                    fs.writeFileSync(__dirname + '/../src/dapp/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
-                    fs.writeFileSync(__dirname + '/../src/server/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
+                    await fs.writeFileSync(__dirname + '/../src/dapp/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
+                    await fs.writeFileSync(__dirname + '/../src/server/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
+
+                    let flightSuretyData = await FlightSuretyData.deployed();
+                    await flightSuretyData.authorizeCaller(FlightSuretyApp.address);
+                    await flightSuretyData.registerFreeAirline(firstAirline)
                 });
         });
 }
