@@ -43,7 +43,8 @@
     "webpack-cli": "3.1.2",
     "webpack-dev-server": "3.1.14",
     "webpack-merge": "5.7.3",
-    "webpack-node-externals": "1.7.2"
+    "webpack-node-externals": "1.7.2",
+    "regenerator-runtime": "0.13.7"
   },
   "dependencies": {
     "start-server-nestjs-webpack-plugin": "2.2.5",

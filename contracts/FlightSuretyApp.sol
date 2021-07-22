@@ -73,15 +73,22 @@ contract FlightSuretyApp {
         _;
     }
     // require is registered
-    modifier requireIsRegistered()
+    modifier requireIsRegistered(address airline)
     {
-        require(flightSuretyData.isRegistered(msg.sender), "Caller is not registered");
+        require(flightSuretyData.isRegistered(airline), "Airline is not registered");
         _;
     }
 
     modifier requireFlightExists(address airline, string flight, uint256 timestamp){
         bytes32 key = getFlightKey(airline, flight, timestamp);
         require(flightExists[key],"Flight doesnt exist.");
+        _;
+    }
+    modifier requireFlightNotAlreadyLate(address airline, string flight, uint256 timestamp){
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        if(flights[key].statusCode == STATUS_CODE_LATE_AIRLINE){
+            revert("Can't buy insurance for already late flight.");
+        }
         _;
     }
     /********************************************************************************************/
@@ -153,6 +160,7 @@ contract FlightSuretyApp {
     )
     external
     requireIsOperational
+    requireFlightNotAlreadyLate(airline, flight, timestamp)
     payable
     {
         flightSuretyData.buy.value(msg.value)(msg.sender, airline, flight, timestamp);
@@ -172,7 +180,7 @@ contract FlightSuretyApp {
     {
         if(msg.sender != contractOwner){
             if (!flightSuretyData.isRegistered(msg.sender)){
-                revert();
+                revert("Flight not registered and caller not contract owner.");
             }
         }
         uint256 airlineCount = flightSuretyData.getAirlineCount();
@@ -244,7 +252,7 @@ contract FlightSuretyApp {
     )
     internal
     requireIsOperational
-    requireIsRegistered
+    requireIsRegistered(airline)
     {
         bytes32 key = getFlightKey(airline, flight, timestamp);
 
