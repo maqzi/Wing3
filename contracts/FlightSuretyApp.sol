@@ -166,6 +166,8 @@ contract FlightSuretyApp {
         flightSuretyData.buy.value(msg.value)(msg.sender, airline, flight, timestamp);
     }
 
+    event AirlineRegistered(address airline);
+
     /**
      * @dev Add an airline to the registration queue
      *
@@ -187,6 +189,8 @@ contract FlightSuretyApp {
         // register airline if less than 4 registrations
         if (airlineCount < 4){
             flightSuretyData.registerAirline(airline);
+            emit AirlineRegistered(airline);
+
             return (true, 0);
         }
 
@@ -208,6 +212,7 @@ contract FlightSuretyApp {
 
                 // register and increment count
                 flightSuretyData.registerAirline(airline);
+                emit AirlineRegistered(airline);
 
                 return (true, votes);
             }
@@ -215,6 +220,7 @@ contract FlightSuretyApp {
         return (false, registrationConsensusParticipants.length);
     }
 
+    event FlightRegistered(address airline, string flight, uint timestamp);
     /**
      * @dev Register a future flight for insuring.
      *
@@ -237,6 +243,7 @@ contract FlightSuretyApp {
 
         flights[key] = f;
         flightExists[key] = true;
+        emit FlightRegistered(airline, flight, timestamp);
     }
 
     /**
@@ -254,6 +261,10 @@ contract FlightSuretyApp {
     requireIsOperational
     requireIsRegistered(airline)
     {
+        if(flights[key].statusCode == statusCode){
+            revert("No change in status.");
+        }
+
         bytes32 key = getFlightKey(airline, flight, timestamp);
 
         flights[key].statusCode = statusCode;
@@ -271,6 +282,10 @@ contract FlightSuretyApp {
         flightSuretyData.fund.value(msg.value)(msg.sender);
     }
 
+    function getCredits(address passenger) requireIsOperational external view{
+        flightSuretyData.getCredits(passenger);
+    }
+
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus
     (
@@ -279,6 +294,8 @@ contract FlightSuretyApp {
         uint256 timestamp
     )
     external
+    requireIsOperational
+    requireFlightExists(airline, flight, timestamp)
     {
         uint8 index = getRandomIndex(msg.sender);
 
@@ -535,4 +552,14 @@ contract FlightSuretyData{
     )
     external
     payable;
+
+    // see credits
+    function getCredits
+    (
+        address passenger
+    )
+    external
+    view
+    returns(uint256);
+
 }

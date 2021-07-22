@@ -180,6 +180,9 @@ contract FlightSuretyData {
     requireAuthorizedCaller
     external
     {
+        if(registrations[add].isValue){
+            revert("Airline already registered");
+        }
         airlineAccount memory newAirline = airlineAccount(add, false, 0, true);
         registrations[add] = newAirline;
     }
@@ -233,11 +236,24 @@ contract FlightSuretyData {
         // credit 1.5 times the purchase
         for(uint i=0; i<purchases[key].amount.length; i++){
             uint256 value = purchases[key].amount[i];
-            credits[purchases[key].insurees[i]] = value.mul(3).div(2);
+            credits[purchases[key].insurees[i]] = credits[purchases[key].insurees[i]].add(value.mul(3).div(2));
         }
 
         // set credited to true so accounts aren't recredited
         purchases[key].isCredited = true;
+    }
+
+    function getCredits
+    (
+        address passenger
+    )
+    requireIsOperational
+    requireAuthorizedCaller
+    external
+    view
+    returns(uint256)
+    {
+        return credits[passenger];
     }
 
     /**
