@@ -193,6 +193,9 @@ contract('Flight Surety Tests', async (accounts) => {
         // console.log('init user balance: ', balance);
 
         await config.flightSuretyData.creditInsurees(airline, flight, timestamp, {from:config.owner});
+
+        assert.equal(await config.flightSuretyApp.getCredits(passenger), 1000000000000000000*1.5, "credits should equal 1.5x the insured amount.")
+
         await config.flightSuretyApp.pay({from:passenger});
 
         let newBalance = await web3.eth.getBalance(passenger);

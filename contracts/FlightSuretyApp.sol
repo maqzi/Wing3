@@ -282,8 +282,8 @@ contract FlightSuretyApp {
         flightSuretyData.fund.value(msg.value)(msg.sender);
     }
 
-    function getCredits(address passenger) requireIsOperational external view{
-        flightSuretyData.getCredits(passenger);
+    function getCredits(address passenger) requireIsOperational external view returns(uint256){
+        return uint256(flightSuretyData.getCredits(passenger));
     }
 
     // Generate a request for oracles to fetch flight information
